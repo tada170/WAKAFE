@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evidenční systém vypité kávy</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            margin: 20px;
+        }
+        .container {
+            max-width: 600px;
+        }
+        #result {
+            margin-top: 20px;
+        }
+        .slider-label {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Evidujte vypité nápoje</h2>
+        <form id="coffeeForm">
+            <div class="form-group">
+                <label for="name">Jméno:</label>
+                <select class="form-control" id="name" required></select>
+            </div>
+            <div id="drinkInputs"></div>
+            <button type="submit" class="btn btn-primary">Odeslat</button>
+        </form>
+
+        <button id="showDrinks" class="btn btn-info mt-3">Zobrazit seznam nápojů</button>
+
+        <div class="form-group mt-4">
+            <label for="monthSelect">Vyberte měsíc pro měsíční přehled:</label>
+            <select class="form-control" id="monthSelect">
+                <option value="1">Leden</option>
+                <option value="2">Únor</option>
+                <option value="3">Březen</option>
+                <option value="4">Duben</option>
+                <option value="5">Květen</option>
+                <option value="6">Červen</option>
+                <option value="7">Červenec</option>
+                <option value="8">Srpen</option>
+                <option value="9">Září</option>
+                <option value="10">Říjen</option>
+                <option value="11">Listopad</option>
+                <option value="12">Prosinec</option>
+            </select>
+        </div>
+        <button id="showMonthlySummary" class="btn btn-secondary">Zobrazit měsíční přehled</button>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const username = 'coffe';
+        const password = 'kafe';
+
+        function sendRequest(url, method = 'GET', body = null) {
+            return fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Authorization': 'Basic ' + btoa(username + ':' + password)
+                },
+                body: body ? body : null
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            loadPeopleAndDrinks();
+        });
+
+        function loadPeopleAndDrinks() {
+            sendRequest('http://127.0.0.1:3000/getPeopleList')
+                .then(data => {
+                    let peopleSelect = document.getElementById('name');
+                    peopleSelect.innerHTML = '';
+                    Object.values(data).forEach(person => {
+                        let option = document.createElement('option');
+                        option.value = person.ID;
+                        option.text = person.name;
+                        peopleSelect.add(option);
+                    });
+                })
+                .catch(error => console.error('Chyba při načítání seznamu lidí:', error));
+
+            sendRequest('http://127.0.0.1:3000/getTypesList')
+                .then(data => {
+                    let drinkInputsDiv = document.getElementById('drinkInputs');
+                    drinkInputsDiv.innerHTML = '';
+                    Object.values(data).forEach(drink => {
+                        let drinkDiv = document.createElement('div');
+                        drinkDiv.classList.add('form-group');
+
+                        let label = document.createElement('label');
+                        label.textContent = `Množství (v ks) pro ${drink.typ}:`;
+
+                        let slider = document.createElement('input');
+                        slider.type = 'range';
+                        slider.classList.add('form-control-range');
+                        slider.id = `drink_${drink.ID}`;
+                        slider.name = `drink_${drink.ID}`;
+                        slider.min = 0;
+                        slider.max = 10;
+                        slider.value = 0;
+                        slider.step = 1; 
+
+                        let sliderValue = document.createElement('span');
+                        sliderValue.classList.add('slider-label');
+                        sliderValue.textContent = `0 ks`;
+
+                        slider.addEventListener('input', function () {
+                            sliderValue.textContent = `${slider.value} ks`;
+                        });
+
+                        drinkDiv.appendChild(label);
+                        drinkDiv.appendChild(slider);
+                        drinkDiv.appendChild(sliderValue);
+                        drinkInputsDiv.appendChild(drinkDiv);
+                    });
+                })
+                .catch(error => console.error('Chyba při načítání seznamu nápojů:', error));
+        }
+
+        document.getElementById('coffeeForm').addEventListener('submit', function (event) {
+            event.preventDefault();
+            const name = document.getElementById('name').value;
+
+            if (!name) {
+                alert('Všechna pole musí být vyplněna.');
+                return;
+            }
+
+            const drinkData = {};
+            const drinkInputs = document.querySelectorAll('#drinkInputs input[type="range"]');
+            drinkInputs.forEach(input => {
+                const drinkId = input.id.split('_')[1];
+                const quantity = input.value;
+                if (quantity && quantity > 0) {
+                    drinkData[drinkId] = quantity;
+                }
+            });
+
+            if (Object.keys(drinkData).length === 0) {
+                alert('Zadejte množství pro alespoň jeden nápoj.');
+                return;
+            }
+
+            const formattedData = `user=${name}&${Object.entries(drinkData).map(([drinkId, quantity]) => `type%5B%5D=${drinkId}&type%5B%5D=${quantity}`).join('&')}`;
+
+            sendRequest('http://127.0.0.1:3000/saveDrinks', 'POST', formattedData)
+                .then(() => {
+                    alert('Data byla úspěšně odeslána!');
+                })
+                .catch(error => console.error('Chyba při ukládání:', error));
+        });
+
+        document.getElementById('showDrinks').addEventListener('click', function () {
+            sendRequest('http://127.0.0.1:3000/getSummaryOfDrinks')
+                .then(data => {
+                    let result = '<h3>Seznam vypitých nápojů</h3><ul>';
+                    data.forEach(entry => {
+                        const [type, quantity, name] = entry;
+                        result += `<li>${name} vypil(a) ${quantity} ks ${type}</li>`;
+                    });
+                    result += '</ul>';
+                    document.getElementById('result').innerHTML = result;
+                })
+                .catch(error => console.error('Chyba při načítání:', error));
+        });
+
+        document.getElementById('showMonthlySummary').addEventListener('click', function () {
+            const monthSelect = document.getElementById('monthSelect');
+            const selectedMonthValue = monthSelect.value;
+
+            sendRequest(`http://127.0.0.1:3000/getSummaryOfDrinks&month=${selectedMonthValue}`)
+                .then(data => {
+                    let result = `<h3>Seznam vypitých nápojů za měsíc ${monthSelect.options[monthSelect.selectedIndex].text}</h3><ul>`;
+                    data.forEach(entry => {
+                        const [type, quantity, name] = entry;
+                        result += `<li>${name} vypil(a) ${quantity} ks ${type}</li>`;
+                    });
+                    result += '</ul>';
+                    document.getElementById('result').innerHTML = result;
+                })
+                .catch(error => console.error('Chyba při načítání:', error));
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coffee App</title>
+    <script src="https://code.jquery.com/jquery-3.6.1.min.js"></script>
+</head>
+<body>
+    <form id="form" action="/api/saveDrinks" method="post">
+        <div id="people"></div>
+        <div id="types"></div>
+        <input type="submit" value="Submit">
+    </form>
+    <p id="output1"></p>
+
+    <script>
+        $(document).ready(function() {
+            const url = 'http://localhost:3000/api/';
+
+            function getPeopleList() {
+                $.getJSON(url + 'getPeopleList', function(data) {
+                    let html = '';
+                    data.forEach(function(person) {
+                        html += `<input type="radio" id="${person.name}" name="user" value="${person.ID}" required>
+                                 <label for="${person.name}">${person.name}</label><br>`;
+                    });
+                    $('#people').append(html);
+                });
+            }
+
+            function getTypesList() {
+                $.getJSON(url + 'getTypesList', function(data) {
+                    let html = '';
+                    data.forEach(function(type, index) {
+                        html += `<label for="${type.typ}">${type.typ}</label>
+                                 <input type="range" name="type[]" min="0" max="10" value="0" onchange="updateTextInput(this, 'count${type.typ}')">
+                                 <b id="count${type.typ}">0</b><br>`;
+                    });
+                    $('#types').append(html);
+                });
+            }
+
+            function updateTextInput(input, id) {
+                document.getElementById(id).innerHTML = input.value;
+            }
+
+            getPeopleList();
+            getTypesList();
+        });
+    </script>
+</body>
+</html>
